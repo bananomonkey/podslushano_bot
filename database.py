@@ -23,6 +23,13 @@ async def init_db() -> None:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS admins (
+                user_id INTEGER PRIMARY KEY,
+                added_by INTEGER,
+                added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         await db.commit()
 
 
@@ -68,3 +75,34 @@ async def get_dialog_user(admin_msg_id: int) -> int | None:
         )
         row = await cursor.fetchone()
         return row[0] if row else None
+
+
+# ---------- Суб-админы ----------
+
+async def add_subadmin(user_id: int, added_by: int) -> None:
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO admins (user_id, added_by) VALUES (?, ?)",
+            (user_id, added_by),
+        )
+        await db.commit()
+
+
+async def remove_subadmin(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("DELETE FROM admins WHERE user_id = ?", (user_id,))
+        await db.commit()
+        return cursor.rowcount > 0
+
+
+async def is_subadmin(user_id: int) -> bool:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT 1 FROM admins WHERE user_id = ?", (user_id,))
+        return await cursor.fetchone() is not None
+
+
+async def get_subadmins() -> list[int]:
+    async with aiosqlite.connect(DB_PATH) as db:
+        cursor = await db.execute("SELECT user_id FROM admins ORDER BY added_at")
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
